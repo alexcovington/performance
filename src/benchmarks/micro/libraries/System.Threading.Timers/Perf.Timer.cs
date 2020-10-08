@@ -5,6 +5,7 @@
 using BenchmarkDotNet.Attributes;
 using MicroBenchmarks;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace System.Threading.Tests
@@ -15,26 +16,7 @@ namespace System.Threading.Tests
         private readonly Timer[] _timers = new Timer[1_000_000];
         private readonly Task[] _tasks = new Task[Environment.ProcessorCount];
 
-        private static TimerCallback _cb = delegate { };
-
-        private Action synchronousCallback = () =>
-        {
-            for (int j = 0; j < 1_000_000; j++)
-            {
-                new Timer(_cb, null, int.MaxValue, -1).Dispose();
-            }
-        };
-
-        private Action asynchronousCallback = async () =>
-        {
-            for (int j = 0; j < 1_000_000; j++)
-            {
-                using (var t = new Timer(_cb, null, int.MaxValue, -1))
-                {
-                    await Task.Yield();
-                }
-            }
-        };
+        private static readonly TimerCallback _cb = delegate { };
 
         [Benchmark]
         public void ShortScheduleAndDispose() => new Timer(_ => { }, null, 50, -1).Dispose();
@@ -60,20 +42,68 @@ namespace System.Threading.Tests
 
         [Benchmark]
         [BenchmarkCategory(Categories.NoWASM)]
-        public void SynchronousContention() => Contention(synchronousCallback);
-
+        public void SynchronousContention() => Contention();
+        
         [Benchmark]
         [BenchmarkCategory(Categories.NoWASM)]
-        public void AsynchronousContention() => Contention(asynchronousCallback);
-
-        private void Contention(Action cb)
+        public void AsynchronousContention() => Contention();
+        
+        private void Contention()
         {
-            Task[] tasks = _tasks;
-            for (int i = 0; i < tasks.Length; i++)
+            foreach (var t in _tasks)
             {
-                tasks[i] = Task.Run(cb);
+                t.Start();
             }
-            Task.WaitAll(tasks);
+            Task.WaitAll(_tasks);
+        }
+        
+        [IterationSetup(Target = nameof(SynchronousContention))]
+        public void SynchronousSetup()
+        {
+            for (int i = 0; i < _tasks.Length; i++)
+            {
+                _tasks[i] = new Task(() =>
+                {
+                    for (int j = 0; j < 1_000_000; j++)
+                    {
+                        new Timer(_cb, null, int.MaxValue, -1).Dispose();
+                    }
+                });
+            }
+        }
+
+        [IterationCleanup(Target = nameof(SynchronousContention))]
+        public void SynchronousCleanup() => ContentionCleanup();
+
+        [IterationCleanup(Target = nameof(AsynchronousContention))]
+        public void AsynchronousCleanup() => ContentionCleanup();
+
+        private void ContentionCleanup()
+        {
+            Console.WriteLine("// Disposing tasks");
+            foreach(var t in _tasks)
+            {
+                t.Dispose();
+            }
+            Console.WriteLine("// Done disposing of tasks.");
+        }
+
+        [IterationSetup(Target = nameof(AsynchronousContention))]
+        public void AsynchronousSetup()
+        {
+            Console.WriteLine("// Setting up async tasks");
+            for (int i = 0; i < _tasks.Length; i++)
+            {
+                _tasks[i] = new Task(async () =>
+                {
+                    await Task.Yield();
+                    for (int j = 0; j < 1_000_000; j++)
+                    {
+                        new Timer(_cb, null, int.MaxValue, -1).Dispose();
+                    }
+                });
+            }
+            Console.WriteLine("// Done setting up async tasks");
         }
 
         [GlobalSetup(Target = nameof(ShortScheduleAndDisposeWithFiringTimers))]
