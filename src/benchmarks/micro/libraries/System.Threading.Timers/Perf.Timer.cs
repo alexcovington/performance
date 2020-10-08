@@ -15,6 +15,27 @@ namespace System.Threading.Tests
         private readonly Timer[] _timers = new Timer[1_000_000];
         private readonly Task[] _tasks = new Task[Environment.ProcessorCount];
 
+        private static TimerCallback _cb = delegate { };
+
+        private Action synchronousCallback = () =>
+        {
+            for (int j = 0; j < 1_000_000; j++)
+            {
+                new Timer(_cb, null, int.MaxValue, -1).Dispose();
+            }
+        };
+
+        private Action asynchronousCallback = async () =>
+        {
+            for (int j = 0; j < 1_000_000; j++)
+            {
+                using (var t = new Timer(_cb, null, int.MaxValue, -1))
+                {
+                    await Task.Yield();
+                }
+            }
+        };
+
         [Benchmark]
         public void ShortScheduleAndDispose() => new Timer(_ => { }, null, 50, -1).Dispose();
 
@@ -39,39 +60,18 @@ namespace System.Threading.Tests
 
         [Benchmark]
         [BenchmarkCategory(Categories.NoWASM)]
-        public void SynchronousContention()
-        {
-            Task[] tasks = _tasks;
-            for (int i = 0; i < tasks.Length; i++)
-            {
-                tasks[i] = Task.Run(() =>
-                {
-                    for (int j = 0; j < 1_000_000; j++)
-                    {
-                        new Timer(delegate { }, null, int.MaxValue, -1).Dispose();
-                    }
-                });
-            }
-            Task.WaitAll(tasks);
-        }
+        public void SynchronousContention() => Contention(synchronousCallback);
 
         [Benchmark]
         [BenchmarkCategory(Categories.NoWASM)]
-        public void AsynchronousContention()
+        public void AsynchronousContention() => Contention(asynchronousCallback);
+
+        private void Contention(Action cb)
         {
             Task[] tasks = _tasks;
             for (int i = 0; i < tasks.Length; i++)
             {
-                tasks[i] = Task.Run(async () =>
-                {
-                    for (int j = 0; j < 1_000_000; j++)
-                    {
-                        using (var t = new Timer(delegate { }, null, int.MaxValue, -1))
-                        {
-                            await Task.Yield();
-                        }
-                    }
-                });
+                tasks[i] = Task.Run(cb);
             }
             Task.WaitAll(tasks);
         }
