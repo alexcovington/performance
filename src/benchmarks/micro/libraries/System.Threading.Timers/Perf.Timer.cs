@@ -80,18 +80,15 @@ namespace System.Threading.Tests
 
         private void ContentionCleanup()
         {
-            Console.WriteLine("// Disposing tasks");
             foreach(var t in _tasks)
             {
                 t.Dispose();
             }
-            Console.WriteLine("// Done disposing of tasks.");
         }
 
         [IterationSetup(Target = nameof(AsynchronousContention))]
         public void AsynchronousSetup()
         {
-            Console.WriteLine("// Setting up async tasks");
             for (int i = 0; i < _tasks.Length; i++)
             {
                 _tasks[i] = new Task(async () =>
@@ -103,7 +100,6 @@ namespace System.Threading.Tests
                     }
                 });
             }
-            Console.WriteLine("// Done setting up async tasks");
         }
 
         [GlobalSetup(Target = nameof(ShortScheduleAndDisposeWithFiringTimers))]
