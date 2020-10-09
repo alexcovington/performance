@@ -13,7 +13,7 @@ namespace System.Threading.Tests
     public class Perf_Timer
     {
         private readonly Timer[] _timers = new Timer[1_000_000];
-        private readonly Task[] _tasks = new Task[Environment.ProcessorCount];
+        private readonly Task[] _tasks = new Task[1024];
 
         [Benchmark]
         public void ShortScheduleAndDispose() => new Timer(_ => { }, null, 50, -1).Dispose();
@@ -46,7 +46,7 @@ namespace System.Threading.Tests
             {
                 tasks[i] = Task.Run(() =>
                 {
-                    for (int j = 0; j < 1_000_000; j++)
+                    for (int j = 0; j < 10_000; j++)
                     {
                         new Timer(delegate { }, null, int.MaxValue, -1).Dispose();
                     }
@@ -64,7 +64,7 @@ namespace System.Threading.Tests
             {
                 tasks[i] = Task.Run(async () =>
                 {
-                    for (int j = 0; j < 1_000_000; j++)
+                    for (int j = 0; j < 10_000; j++)
                     {
                         using (var t = new Timer(delegate { }, null, int.MaxValue, -1))
                         {
