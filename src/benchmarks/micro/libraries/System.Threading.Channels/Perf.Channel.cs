@@ -87,8 +87,10 @@ namespace System.Threading.Channels.Tests
                     ChannelWriter<int> writer = channel2.Writer;
                     for (int i = 0; i < PingPongCount; i++)
                     {
-                        await writer.WriteAsync(i);
-                        await reader.ReadAsync();
+                        await Task.WhenAll(
+                            writer.WriteAsync(i).AsTask(),
+                            reader.ReadAsync().AsTask());
+                        
                     }
                 }),
                 Task.Run(async () =>
@@ -97,8 +99,9 @@ namespace System.Threading.Channels.Tests
                     ChannelReader<int> reader = channel2.Reader;
                     for (int i = 0; i < PingPongCount; i++)
                     {
-                        await reader.ReadAsync();
-                        await writer.WriteAsync(i);
+                        await Task.WhenAll(
+                            reader.ReadAsync().AsTask(),
+                            writer.WriteAsync(i).AsTask());
                     }
                 }));
         }
